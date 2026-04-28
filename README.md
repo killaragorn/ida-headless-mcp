@@ -7,11 +7,19 @@ Headless IDA Pro binary analysis via Model Context Protocol. Go orchestrates mul
 ### Install as a Claude Code plugin
 
 ```
-/plugin install killaragorn/ida-headless-mcp
+/plugin marketplace add killaragorn/ida-headless-mcp
+/plugin install ida-headless-mcp@ida-headless-mcp
+```
+
+Then `/mcp` to confirm `ida-headless` is connected. The repo ships **prebuilt Go binaries for Windows/Linux/macOS (amd64 + arm64)** under `bin/`, so the plugin works immediately after install.
+
+You still need to activate idalib once per machine before opening a binary:
+
+```
 /ida-init
 ```
 
-Then `/mcp` to confirm `ida-headless` is connected. `/ida-init` is a bundled slash command that drives the friendly initializer (detect IDA, install idalib, install Python deps, build the Go binary). On a fresh machine you'll need Go 1.21+, Python 3.10+, and IDA Pro 9.0+ / Essential 9.2+ available locally.
+(or run `python scripts/launch.py init` from the plugin directory). This step detects IDA, installs the `idapro` Python package, and installs the Python worker dependencies. It does **not** rebuild the binary — only the dependency setup. Requires Python 3.10+ and IDA Pro 9.0+ / Essential 9.2+.
 
 ### Install as a Codex plugin (marketplace)
 
@@ -19,12 +27,19 @@ Then `/mcp` to confirm `ida-headless` is connected. `/ida-init` is a bundled sla
 codex plugin marketplace add killaragorn/ida-headless-mcp
 ```
 
-This adds the project as a plugin marketplace. After install, finish the one-time setup:
+The bundled `bin/ida-mcp-server-<os>-<arch>[.exe]` binaries are picked up automatically by `scripts/launch.py`, so the MCP server is ready as soon as the marketplace install completes.
+
+Finish the one-time idalib setup (no Go build required - binary is prebuilt):
 
 ```bash
-git clone https://github.com/killaragorn/ida-headless-mcp.git
-cd ida-headless-mcp
-go run ./cmd/ida-mcp-server init      # detects IDA, installs idalib + Python deps, builds bin/
+# inside the cloned plugin directory:
+python scripts/launch.py init --skip-build
+```
+
+Or just call the binary directly:
+
+```bash
+./bin/ida-mcp-server-<os>-<arch> init --skip-build
 ```
 
 The plugin manifest declares an `ida-headless` stdio MCP server pointing at `./scripts/launch.py`. Codex resolves the relative `cwd` to the cloned plugin directory, so the launcher finds the bundled binary automatically.

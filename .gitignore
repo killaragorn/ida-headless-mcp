@@ -1,6 +1,8 @@
 # Build artifacts
 .gocache/
-bin/
+# Local builds; prebuilt per-platform binaries are committed under bin/.
+bin/ida-mcp-server
+bin/ida-mcp-server.exe
 
 # Python
 *.pyc
