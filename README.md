@@ -2,6 +2,39 @@
 
 Headless IDA Pro binary analysis via Model Context Protocol. Go orchestrates multi-session concurrency while Python workers handle IDA operations.
 
+## Quick start
+
+### Install as a Claude Code plugin
+
+```
+/plugin install killaragorn/ida-headless-mcp
+/ida-init
+```
+
+Then `/mcp` to confirm `ida-headless` is connected. `/ida-init` is a bundled slash command that drives the friendly initializer (detect IDA, install idalib, install Python deps, build the Go binary). On a fresh machine you'll need Go 1.21+, Python 3.10+, and IDA Pro 9.0+ / Essential 9.2+ available locally.
+
+### Install for Codex CLI
+
+```bash
+git clone https://github.com/killaragorn/ida-headless-mcp.git
+cd ida-headless-mcp
+go run ./cmd/ida-mcp-server init      # one-shot setup
+codex mcp add ida-headless -- "$(pwd)/bin/ida-mcp-server" --stdio
+```
+
+`codex mcp list` should now show `ida-headless`. Print platform-specific snippets at any time with:
+
+```bash
+ida-mcp-server print-config claude-desktop
+ida-mcp-server print-config claude-code
+ida-mcp-server print-config codex
+ida-mcp-server print-config codex-add
+```
+
+### Use as a standalone HTTP server
+
+`bin/ida-mcp-server` (no flags) listens on `http://localhost:17300/` (Streamable HTTP) and `http://localhost:17300/sse` (SSE). See [Standalone HTTP server](#standalone-http-server) below for client config.
+
 ## Architecture
 
 ```
@@ -80,22 +113,20 @@ make install-python         # Install Python dependencies
 make build                  # Build Go server
 ```
 
-## Usage
-
-### Start Server
+## Standalone HTTP server
 
 ```bash
 ./bin/ida-mcp-server
 ```
 
-Server starts running on port 17300 (configurable via `config.json`, env, or `--port`), exposing both transports:
+Listens on port 17300 (configurable via `config.json`, env, or `--port`):
 
 - Streamable HTTP (recommended): `http://localhost:17300/`
 - SSE compatibility endpoint: `http://localhost:17300/sse`
 
-### Configure Claude Desktop
+### Configure Claude Desktop (HTTP mode)
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) / `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
@@ -108,9 +139,9 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop after editing.
+Restart Claude Desktop after editing. For stdio mode, see `ida-mcp-server print-config claude-desktop`.
 
-### Configure Claude Code
+### Configure Claude Code (manual, without `/plugin install`)
 
 Copy `.claude/settings.json` to `~/.claude/settings.json` to grant access to all IDA MCP tools.
 

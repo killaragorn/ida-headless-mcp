@@ -1,4 +1,4 @@
-.PHONY: proto proto-check clean build test run restart integration-test inspector setup setup-idalib
+.PHONY: proto proto-check clean build test run restart integration-test inspector setup setup-idalib init plugin-check stdio
 
 # Protobuf generation
 proto:
@@ -13,6 +13,20 @@ proto-check:
 # Build server binary (proto files are committed, no need to regenerate)
 build:
 	go build -o bin/ida-mcp-server ./cmd/ida-mcp-server
+
+# Run the friendly initializer (detect IDA, install deps, build binary)
+init: build
+	./bin/ida-mcp-server init
+
+# Run server in stdio mode (for plugin install testing)
+stdio: build
+	./bin/ida-mcp-server --stdio
+
+# Sanity-check the Claude Code plugin manifest is valid JSON
+plugin-check:
+	@command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1 || { echo "python required for plugin-check"; exit 1; }
+	@python3 -c "import json; json.load(open('.claude-plugin/plugin.json'))" 2>/dev/null || python -c "import json; json.load(open('.claude-plugin/plugin.json'))"
+	@echo "✓ .claude-plugin/plugin.json is valid JSON"
 
 # Run fast unit tests only (excludes integration tests)
 test:
