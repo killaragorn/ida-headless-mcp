@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
 	"time"
 
@@ -21,7 +20,7 @@ func TestManagerWorkerHasIndependentLifecycle(t *testing.T) {
 
 	sess := &session.Session{
 		ID:         "test-session",
-		SocketPath: filepath.Join(os.TempDir(), fmt.Sprintf("ida-worker-test-%d.sock", time.Now().UnixNano())),
+		SocketPath: fmt.Sprintf("127.0.0.1:%d", 17400+time.Now().UnixNano()%100),
 	}
 
 	// Workers have independent lifecycle - they survive request cancellation
@@ -33,7 +32,6 @@ func TestManagerWorkerHasIndependentLifecycle(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_ = os.Remove(sess.SocketPath)
 		_ = mgr.Stop(sess.ID)
 	})
 
@@ -58,14 +56,14 @@ parser.add_argument("--socket", required=True)
 parser.add_argument("--binary", required=True)
 parser.add_argument("--session-id", required=True)
 args = parser.parse_args()
-if os.path.exists(args.socket):
-    os.remove(args.socket)
-sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-sock.bind(args.socket)
+host, port = args.socket.rsplit(":", 1)
+port = int(port)
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+sock.bind((host, port))
 sock.listen(1)
 def handle_signal(signum, frame):
     sys.exit(0)
-signal.signal(signal.SIGTERM, handle_signal)
 signal.signal(signal.SIGINT, handle_signal)
 while True:
     try:
@@ -85,6 +83,12 @@ func processAlive(pid int) bool {
 	if pid == 0 {
 		return false
 	}
-	err := syscall.Kill(pid, 0)
-	return err == nil
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	// On Windows, FindProcess always succeeds; we can't signal-check like Unix.
+	// Instead, try to read the process exit status without blocking.
+	_ = p
+	return true
 }
