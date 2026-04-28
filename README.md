@@ -13,12 +13,30 @@ Headless IDA Pro binary analysis via Model Context Protocol. Go orchestrates mul
 
 Then `/mcp` to confirm `ida-headless` is connected. `/ida-init` is a bundled slash command that drives the friendly initializer (detect IDA, install idalib, install Python deps, build the Go binary). On a fresh machine you'll need Go 1.21+, Python 3.10+, and IDA Pro 9.0+ / Essential 9.2+ available locally.
 
-### Install for Codex CLI
+### Install as a Codex plugin (marketplace)
+
+```
+codex plugin marketplace add killaragorn/ida-headless-mcp
+```
+
+This adds the project as a plugin marketplace. After install, finish the one-time setup:
 
 ```bash
 git clone https://github.com/killaragorn/ida-headless-mcp.git
 cd ida-headless-mcp
-go run ./cmd/ida-mcp-server init      # one-shot setup
+go run ./cmd/ida-mcp-server init      # detects IDA, installs idalib + Python deps, builds bin/
+```
+
+The plugin manifest declares an `ida-headless` stdio MCP server pointing at `./scripts/launch.py`. Codex resolves the relative `cwd` to the cloned plugin directory, so the launcher finds the bundled binary automatically.
+
+### Install for Codex CLI without the marketplace
+
+If you'd rather skip the marketplace and register the server directly:
+
+```bash
+git clone https://github.com/killaragorn/ida-headless-mcp.git
+cd ida-headless-mcp
+go run ./cmd/ida-mcp-server init
 codex mcp add ida-headless -- "$(pwd)/bin/ida-mcp-server" --stdio
 ```
 

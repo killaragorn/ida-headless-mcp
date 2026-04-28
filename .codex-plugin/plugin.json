@@ -1,0 +1,34 @@
+{
+  "name": "ida-headless-mcp",
+  "version": "0.2.0",
+  "description": "Headless IDA Pro binary analysis via MCP - 52 tools for reverse engineering (functions, decompilation, xrefs, structs, IL2CPP / Flutter metadata import).",
+  "author": {
+    "name": "killaragorn",
+    "url": "https://github.com/killaragorn"
+  },
+  "homepage": "https://github.com/killaragorn/ida-headless-mcp",
+  "repository": "https://github.com/killaragorn/ida-headless-mcp",
+  "license": "MIT",
+  "keywords": [
+    "ida",
+    "ida-pro",
+    "reverse-engineering",
+    "binary-analysis",
+    "decompiler",
+    "il2cpp",
+    "flutter",
+    "mcp"
+  ],
+  "mcpServers": "./.codex-plugin/mcp.json",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "IDA Headless MCP",
+    "shortDescription": "Drive IDA Pro headlessly with 52 binary analysis tools",
+    "longDescription": "Exposes a headless IDA Pro instance over MCP: open binaries, run auto-analysis, list functions/imports/exports/strings, fetch decompiled pseudocode, traverse xrefs, edit names/types/comments, search bytes and text, and import Il2CppDumper or unflutter metadata. Each session is an isolated worker process so multiple binaries can be analyzed concurrently.",
+    "developerName": "killaragorn",
+    "category": "Coding",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://github.com/killaragorn/ida-headless-mcp",
+    "defaultPrompt": "Open the binary at /path/to/lib.so, run auto-analysis, then list functions that reference the string 'license_check' and decompile the largest one."
+  }
+}
