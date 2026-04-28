@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -156,8 +157,8 @@ func validateConfig(cfg *server.Config) error {
 		return fmt.Errorf("python_worker_path %q is a directory, expected a Python script", cfg.PythonWorkerPath)
 	}
 
-	// Check it's executable (Unix-like systems)
-	if info.Mode()&0111 == 0 {
+	// Check it's executable (Unix-like systems only; skip on Windows)
+	if runtime.GOOS != "windows" && info.Mode()&0111 == 0 {
 		return fmt.Errorf("python_worker_path %q is not executable (try: chmod +x %s)", cfg.PythonWorkerPath, cfg.PythonWorkerPath)
 	}
 

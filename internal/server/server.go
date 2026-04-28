@@ -69,10 +69,10 @@ func GetDefaultDBDir() string {
 	if xdgData := os.Getenv("XDG_DATA_HOME"); xdgData != "" {
 		return filepath.Join(xdgData, "ida-mcp", "sessions")
 	}
-	if home := os.Getenv("HOME"); home != "" {
+	if home, err := os.UserHomeDir(); err == nil {
 		return filepath.Join(home, ".local", "share", "ida-mcp", "sessions")
 	}
-	return "/tmp/ida_sessions"
+	return filepath.Join(os.TempDir(), "ida_sessions")
 }
 
 func LoadConfig(path string) (Config, error) {
