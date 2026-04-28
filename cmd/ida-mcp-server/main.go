@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -19,6 +20,8 @@ import (
 	"github.com/zboralski/ida-headless-mcp/internal/worker"
 )
 
+const version = "0.2.0"
+
 var (
 	configPath   = flag.String("config", "config.json", "Path to server config")
 	portFlag     = flag.Int("port", 0, "HTTP port (overrides config)")
@@ -26,13 +29,60 @@ var (
 	maxSessions  = flag.Int("max-sessions", 0, "Max concurrent sessions (overrides config)")
 	timeoutFlag  = flag.Duration("session-timeout", 0, "Session idle timeout (overrides config)")
 	debugFlag    = flag.Bool("debug", false, "Enable verbose debug logging")
+	stdioFlag    = flag.Bool("stdio", false, "Run as stdio MCP server (for Claude Code / Codex plugin install)")
 )
 
 func main() {
-	flag.Parse()
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "init":
+			os.Exit(runInit(os.Args[2:]))
+		case "print-config":
+			os.Exit(runPrintConfig(os.Args[2:]))
+		case "version", "--version", "-v":
+			fmt.Printf("ida-mcp-server %s (%s/%s)\n", version, runtime.GOOS, runtime.GOARCH)
+			return
+		case "help", "--help", "-h":
+			printUsage()
+			return
+		}
+	}
 
-	logger := log.New(os.Stdout, "[MCP] ", log.LstdFlags)
-	logger.Printf("Starting IDA Headless MCP Server")
+	flag.Parse()
+	runServe()
+}
+
+func printUsage() {
+	fmt.Fprintf(os.Stderr, `ida-mcp-server %s — Headless IDA Pro binary analysis via MCP
+
+Usage:
+  ida-mcp-server [flags]              Run HTTP MCP server (default)
+  ida-mcp-server --stdio               Run stdio MCP server (for plugin install)
+  ida-mcp-server init [flags]          Detect IDA, install deps, build binary
+  ida-mcp-server print-config <target> Print MCP config for a client
+  ida-mcp-server version               Show version
+  ida-mcp-server help                  Show this help
+
+Print-config targets:
+  claude-desktop   JSON snippet for claude_desktop_config.json
+  claude-code      JSON snippet for ~/.claude/settings.json
+  codex            TOML snippet for ~/.codex/config.toml
+  codex-add        Shell command using 'codex mcp add'
+
+Flags (serve mode):
+`, version)
+	flag.PrintDefaults()
+}
+
+func runServe() {
+	// Stdio mode requires logs go to stderr to avoid corrupting JSON-RPC on stdout
+	logOut := os.Stdout
+	if *stdioFlag {
+		logOut = os.Stderr
+	}
+	logger := log.New(logOut, "[MCP] ", log.LstdFlags)
+	logger.Printf("Starting IDA Headless MCP Server %s", version)
+
 	cfg, err := server.LoadConfig(*configPath)
 	if err != nil {
 		logger.Fatalf("failed to load config: %v", err)
@@ -59,7 +109,8 @@ func main() {
 		cfg.Debug = true
 	}
 
-	// Validate configuration before starting server
+	resolvePythonWorker(&cfg)
+
 	if err := validateConfig(&cfg); err != nil {
 		logger.Fatalf("invalid configuration: %v", err)
 	}
@@ -73,17 +124,19 @@ func main() {
 	}
 
 	srv := server.New(registry, workers, logger, sessionTimeout, cfg.Debug, store)
-
 	srv.RestoreSessions()
-
 	go srv.Watchdog()
 
 	mcpServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "ida-headless",
-		Version: "0.1.0",
+		Version: version,
 	}, nil)
-
 	srv.RegisterTools(mcpServer)
+
+	if *stdioFlag {
+		runStdio(mcpServer, registry, workers, logger)
+		return
+	}
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	mux := srv.HTTPMux(mcpServer)
@@ -103,22 +156,16 @@ func main() {
 	go func() {
 		<-sigChan
 		logger.Println("Shutting down gracefully...")
-
-		// Give HTTP server 10 seconds to finish in-flight requests
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			logger.Printf("HTTP server shutdown error: %v", err)
 		}
-
-		// Stop all workers and log any errors
 		for _, sess := range registry.List() {
 			if err := workers.Stop(sess.ID); err != nil {
 				logger.Printf("Failed to stop worker %s: %v", sess.ID, err)
 			}
 		}
-
 		logger.Println("Shutdown complete")
 		os.Exit(0)
 	}()
@@ -128,36 +175,78 @@ func main() {
 	}
 }
 
+func runStdio(mcpServer *mcp.Server, registry *session.Registry, workers worker.Controller, logger *log.Logger) {
+	logger.Println("Running in stdio mode (MCP over stdin/stdout)")
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	err := mcpServer.Run(ctx, &mcp.StdioTransport{})
+	if err != nil && !errors.Is(err, context.Canceled) {
+		logger.Printf("MCP server error: %v", err)
+	}
+
+	logger.Println("Shutting down workers...")
+	for _, sess := range registry.List() {
+		if stopErr := workers.Stop(sess.ID); stopErr != nil {
+			logger.Printf("Failed to stop worker %s: %v", sess.ID, stopErr)
+		}
+	}
+	logger.Println("Shutdown complete")
+}
+
+// resolvePythonWorker looks for the worker script in plausible locations relative
+// to the binary, so the binary works when called from outside the repo (e.g., as
+// a Claude Code plugin from `${CLAUDE_PLUGIN_ROOT}/bin/ida-mcp-server`).
+func resolvePythonWorker(cfg *server.Config) {
+	if cfg.PythonWorkerPath == "" {
+		cfg.PythonWorkerPath = "python/worker/server.py"
+	}
+	if _, err := os.Stat(cfg.PythonWorkerPath); err == nil {
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	exeDir := filepath.Dir(exe)
+	candidates := []string{
+		filepath.Join(exeDir, "..", "python", "worker", "server.py"),
+		filepath.Join(exeDir, "python", "worker", "server.py"),
+	}
+	for _, c := range candidates {
+		if abs, absErr := filepath.Abs(c); absErr == nil {
+			if _, statErr := os.Stat(abs); statErr == nil {
+				cfg.PythonWorkerPath = abs
+				return
+			}
+		}
+	}
+}
+
 func validateConfig(cfg *server.Config) error {
-	// Validate MaxConcurrentSession (0 = unlimited, negative is invalid)
 	if cfg.MaxConcurrentSession < 0 {
 		return fmt.Errorf("max_concurrent_sessions must be non-negative, got %d (use 0 for unlimited)", cfg.MaxConcurrentSession)
 	}
 
-	// Validate PythonWorkerPath exists and is executable
 	if cfg.PythonWorkerPath == "" {
 		return fmt.Errorf("python_worker_path is required")
 	}
 
-	// Make path absolute for clarity in error messages
 	absPath, err := filepath.Abs(cfg.PythonWorkerPath)
 	if err != nil {
 		return fmt.Errorf("invalid python_worker_path %q: %w", cfg.PythonWorkerPath, err)
 	}
 	cfg.PythonWorkerPath = absPath
 
-	// Check file exists
 	info, err := os.Stat(cfg.PythonWorkerPath)
 	if err != nil {
 		return fmt.Errorf("python_worker_path %q not found: %w", cfg.PythonWorkerPath, err)
 	}
 
-	// Check it's a file, not a directory
 	if info.IsDir() {
 		return fmt.Errorf("python_worker_path %q is a directory, expected a Python script", cfg.PythonWorkerPath)
 	}
 
-	// Check it's executable (Unix-like systems only; skip on Windows)
 	if runtime.GOOS != "windows" && info.Mode()&0111 == 0 {
 		return fmt.Errorf("python_worker_path %q is not executable (try: chmod +x %s)", cfg.PythonWorkerPath, cfg.PythonWorkerPath)
 	}
