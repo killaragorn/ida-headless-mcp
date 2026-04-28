@@ -2,24 +2,17 @@
 """
 Cross-platform launcher for ida-mcp-server.
 
-Resolves the bundled Go binary based on OS, builds it on first run if missing
-(when Go is available), and execs it with the supplied arguments. Used by the
-Claude Code plugin manifest so a single `command` entry works on every OS.
-
-Search order:
-  1. ${CLAUDE_PLUGIN_ROOT}/bin/ida-mcp-server[.exe]  (set by Claude Code)
-  2. <repo-root>/bin/ida-mcp-server[.exe]
-  3. ida-mcp-server[.exe] on PATH
-
-If none found and Go is on PATH, the launcher attempts `go build` once.
+Picks the prebuilt binary under ``bin/`` that matches the current OS and
+architecture and execs it with the supplied arguments. The repository ships
+with binaries for windows/amd64, linux/amd64, linux/arm64, darwin/amd64, and
+darwin/arm64. If the matching binary isn't present, the launcher exits with a
+clear error - it never falls back to PATH lookup or attempts to build.
 """
 
 from __future__ import annotations
 
 import os
 import platform
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -61,79 +54,41 @@ def detect_platform() -> tuple[str, str]:
     return goos, goarch
 
 
-def binary_candidates() -> list[str]:
-    """Return ordered list of binary names to look for under bin/."""
+def binary_path(root: Path) -> Path:
     goos, goarch = detect_platform()
     suffix = ".exe" if goos == "windows" else ""
-    # Prefer the platform-specific prebuilt binary, then fall back to a
-    # generic name (which `make build` / init produces locally).
-    return [
-        f"ida-mcp-server-{goos}-{goarch}{suffix}",
-        f"ida-mcp-server{suffix}",
-    ]
-
-
-def find_binary(root: Path) -> Path | None:
-    bin_dir = root / "bin"
-    for name in binary_candidates():
-        candidate = bin_dir / name
-        if candidate.is_file():
-            # On Unix, the bundled binary may have lost +x during clone/copy
-            if os.name != "nt" and not os.access(str(candidate), os.X_OK):
-                try:
-                    candidate.chmod(candidate.stat().st_mode | 0o111)
-                except OSError:
-                    pass
-            return candidate
-    # Try PATH as a last resort
-    on_path = shutil.which("ida-mcp-server")
-    if on_path:
-        return Path(on_path)
-    return None
-
-
-def attempt_build(root: Path) -> Path | None:
-    if shutil.which("go") is None:
-        return None
-    name = binary_candidates()[-1]  # generic name (no platform suffix)
-    out = root / "bin" / name
-    out.parent.mkdir(parents=True, exist_ok=True)
-    print(
-        f"[ida-headless-mcp] prebuilt binary not found; building via `go build` at {root}",
-        file=sys.stderr,
-    )
-    try:
-        subprocess.run(
-            ["go", "build", "-o", str(out), "./cmd/ida-mcp-server"],
-            cwd=str(root),
-            check=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        print(f"[ida-headless-mcp] go build failed: {exc}", file=sys.stderr)
-        return None
-    return out if out.is_file() else None
+    return root / "bin" / f"ida-mcp-server-{goos}-{goarch}{suffix}"
 
 
 def main() -> int:
     root = repo_root()
-    binary = find_binary(root)
-    if binary is None:
-        binary = attempt_build(root)
-    if binary is None:
+    binary = binary_path(root)
+
+    if not binary.is_file():
+        goos, goarch = detect_platform()
         print(
-            "[ida-headless-mcp] Server binary not found. Run `ida-mcp-server init` "
-            "or `make build` from the project root to build it.",
+            f"[ida-headless-mcp] Prebuilt binary not found: {binary}\n"
+            f"  Detected platform: {goos}/{goarch}\n"
+            f"  Available binaries are committed under {root / 'bin'}.\n"
+            f"  If your platform isn't shipped, build from source:\n"
+            f"    cd \"{root}\" && go build -o \"{binary}\" ./cmd/ida-mcp-server",
             file=sys.stderr,
         )
         return 1
 
+    # Restore +x if the bundled binary lost its mode during clone or download.
+    if os.name != "nt" and not os.access(str(binary), os.X_OK):
+        try:
+            binary.chmod(binary.stat().st_mode | 0o111)
+        except OSError as exc:
+            print(
+                f"[ida-headless-mcp] cannot make {binary} executable: {exc}",
+                file=sys.stderr,
+            )
+            return 1
+
     args = [str(binary), *sys.argv[1:]]
-    if os.name == "nt":
-        # On Windows, os.execv replaces the process and Claude Code's stdio
-        # pipes hand off cleanly; subprocess handoff loses them.
-        os.execv(str(binary), args)
-    else:
-        os.execv(str(binary), args)
+    os.execv(str(binary), args)
     return 0  # unreachable
 
 
