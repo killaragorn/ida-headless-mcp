@@ -24,19 +24,27 @@ except ImportError:
 from connect_server import ConnectServer
 from ida_wrapper import IDAWrapper
 
-def serve_on_unix_socket(socket_path: str, handler, session_id: str):
-    """Serve Connect RPC over Unix domain socket"""
+def serve_on_tcp(addr: str, handler, session_id: str):
+    """Serve Connect RPC over TCP socket.
 
-    # Remove existing socket
-    if os.path.exists(socket_path):
-        os.remove(socket_path)
+    addr is 'host:port' (e.g. '127.0.0.1:12345').
+    A ready-file is written once listening so the Go side can detect it.
+    """
+    host, port = addr.rsplit(":", 1)
+    port = int(port)
 
-    # Create Unix socket
-    server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server_socket.bind(socket_path)
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_socket.bind((host, port))
     server_socket.listen(5)
 
-    logging.info(f"[Worker {session_id}] Listening on {socket_path}")
+    # Write ready file so the Go manager knows we are listening
+    ready_file = addr.replace(":", "_") + ".ready"
+    ready_path = os.path.join(os.environ.get("TEMP", os.environ.get("TMP", "/tmp")), ready_file)
+    with open(ready_path, "w") as f:
+        f.write(f"{host}:{port}")
+
+    logging.info(f"[Worker {session_id}] Listening on {host}:{port}")
 
     try:
         while True:
@@ -45,8 +53,8 @@ def serve_on_unix_socket(socket_path: str, handler, session_id: str):
             handle_connection(conn, handler)
     finally:
         server_socket.close()
-        if os.path.exists(socket_path):
-            os.remove(socket_path)
+        if os.path.exists(ready_path):
+            os.remove(ready_path)
 
 def handle_connection(conn: socket.socket, handler):
     """Handle single HTTP connection"""
@@ -96,7 +104,7 @@ def handle_connection(conn: socket.socket, handler):
 
 def main():
     parser = argparse.ArgumentParser(description="IDA Connect Worker")
-    parser.add_argument("--socket", required=True, help="Unix socket path")
+    parser.add_argument("--socket", required=True, help="TCP address host:port")
     parser.add_argument("--binary", required=True, help="Binary file path")
     parser.add_argument("--session-id", required=True, help="Session ID")
     parser.add_argument("--log-level", default="INFO", help="Log level")
@@ -121,7 +129,7 @@ def main():
         return server.handle(method, path, data)
 
     try:
-        serve_on_unix_socket(args.socket, handle_request, args.session_id)
+        serve_on_tcp(args.socket, handle_request, args.session_id)
     except KeyboardInterrupt:
         logging.info("Shutting down...")
     finally:

@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"net"
 	"path/filepath"
 	"sync"
 	"time"
@@ -49,6 +50,18 @@ func (s *Session) Metadata() Metadata {
 	}
 }
 
+// allocatePort finds a free TCP port by binding to :0 and releasing it.
+func allocatePort() int {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		// Fallback to a random high port
+		return 17301 + int(time.Now().UnixNano()%1000)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	return port
+}
+
 // Registry manages active sessions
 type Registry struct {
 	sessions    map[string]*Session
@@ -83,7 +96,7 @@ func (r *Registry) Create(binaryPath string, timeout time.Duration) (*Session, e
 		CreatedAt:    time.Now(),
 		LastActivity: time.Now(),
 		Timeout:      timeout,
-		SocketPath:   fmt.Sprintf("/tmp/ida-worker-%s.sock", uuid.New().String()[:8]),
+		SocketPath:   fmt.Sprintf("127.0.0.1:%d", allocatePort()),
 	}
 
 	r.sessions[session.ID] = session
@@ -110,7 +123,7 @@ func (r *Registry) Restore(meta Metadata) (*Session, error) {
 		CreatedAt:    meta.CreatedAt,
 		LastActivity: meta.LastActivity,
 		Timeout:      meta.Timeout,
-		SocketPath:   fmt.Sprintf("/tmp/ida-worker-%s.sock", uuid.New().String()[:8]),
+		SocketPath:   fmt.Sprintf("127.0.0.1:%d", allocatePort()),
 	}
 	r.sessions[session.ID] = session
 	r.binaryIndex[normPath] = session

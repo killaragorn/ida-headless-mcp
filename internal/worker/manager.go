@@ -58,15 +58,10 @@ func NewManager(pythonScript string, logger *log.Logger) *Manager {
 
 // Start spawns Python worker for session
 func (m *Manager) Start(ctx context.Context, sess *session.Session, binaryPath string) error {
-	// Create Unix domain socket
-	if err := os.RemoveAll(sess.SocketPath); err != nil {
-		return fmt.Errorf("failed to remove old socket: %w", err)
-	}
-
 	// Start Python worker with independent lifecycle from HTTP request
 	// Workers outlive the request that spawned them
 	workerCtx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(workerCtx, "python3", m.pythonScript,
+	cmd := exec.CommandContext(workerCtx, "python", m.pythonScript,
 		"--socket", sess.SocketPath,
 		"--binary", binaryPath,
 		"--session-id", sess.ID)
@@ -103,16 +98,16 @@ func (m *Manager) Start(ctx context.Context, sess *session.Session, binaryPath s
 		return fmt.Errorf("worker socket not ready: %w", err)
 	}
 
-	// Create Connect clients over Unix socket
+	// Create Connect clients over TCP
 	httpClient := &http.Client{
 		Transport: &http.Transport{
 			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", sess.SocketPath)
+				return net.Dial("tcp", sess.SocketPath)
 			},
 		},
 	}
 
-	baseURL := "http://unix"
+	baseURL := "http://" + sess.SocketPath
 	sessionClient := workerconnect.NewSessionControlClient(httpClient, baseURL)
 	analysisClient := workerconnect.NewAnalysisToolsClient(httpClient, baseURL)
 	healthClient := workerconnect.NewHealthcheckClient(httpClient, baseURL)
@@ -207,19 +202,16 @@ func (m *Manager) GetClient(sessionID string) (*WorkerClient, error) {
 	return worker, nil
 }
 
-// waitForSocket polls until socket exists
-func (m *Manager) waitForSocket(socketPath string, timeout time.Duration) error {
+// waitForSocket polls until TCP address is reachable
+func (m *Manager) waitForSocket(addr string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(socketPath); err == nil {
-			// Try to connect
-			conn, err := net.Dial("unix", socketPath)
-			if err == nil {
-				conn.Close()
-				return nil
-			}
+		conn, err := net.DialTimeout("tcp", addr, 500*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	return fmt.Errorf("timeout waiting for socket %s", socketPath)
+	return fmt.Errorf("timeout waiting for socket %s", addr)
 }
