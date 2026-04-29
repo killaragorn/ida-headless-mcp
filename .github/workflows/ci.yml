@@ -42,6 +42,7 @@ jobs:
               ".codex-plugin/plugin.json",
               ".codex-plugin/mcp.json",
               ".claude-plugin/plugin.json",
+              ".claude-plugin/marketplace.json",
               ".agents/plugins/marketplace.json",
               ".claude/settings.json",
               "config/config.example.json",
