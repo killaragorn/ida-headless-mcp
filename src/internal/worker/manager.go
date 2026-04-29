@@ -38,6 +38,7 @@ type WorkerClient struct {
 	ctx         context.Context
 	session     *session.Session
 	binaryPath  string
+	waited      chan struct{}
 }
 
 // Controller captures the worker operations required by the server.
@@ -121,6 +122,7 @@ func (m *Manager) Start(ctx context.Context, sess *session.Session, binaryPath s
 		ctx:         workerCtx,
 		session:     sess,
 		binaryPath:  binaryPath,
+		waited:      make(chan struct{}),
 	}
 
 	m.mu.Lock()
@@ -134,6 +136,7 @@ func (m *Manager) Start(ctx context.Context, sess *session.Session, binaryPath s
 
 func (m *Manager) monitorWorker(sessionID string, worker *WorkerClient) {
 	err := worker.cmd.Wait()
+	close(worker.waited)
 	if err != nil && worker.ctx.Err() == nil {
 		m.logger.Printf("[Worker] Process %d exited with error for session %s: %v", worker.session.WorkerPID, sessionID, err)
 	} else {
@@ -174,11 +177,13 @@ func (m *Manager) Stop(sessionID string) error {
 		}
 	}
 
-	// Wait for process to exit and be reaped - prevent zombie
-	// The monitorWorker goroutine will also call Wait(), but that's safe
-	// (subsequent Wait() calls return the cached result)
-	if waitErr := worker.cmd.Wait(); waitErr != nil && !errors.Is(waitErr, os.ErrProcessDone) {
-		m.logger.Printf("[Worker] Process %d wait error: %v", worker.cmd.Process.Pid, waitErr)
+	// Wait for the monitor goroutine to reap the process. Calling cmd.Wait()
+	// here directly would deadlock because os/exec.Cmd.Wait is not safe to
+	// invoke from multiple goroutines.
+	select {
+	case <-worker.waited:
+	case <-time.After(10 * time.Second):
+		m.logger.Printf("[Worker] Process %d wait timed out", worker.cmd.Process.Pid)
 	}
 
 	m.mu.Lock()
