@@ -288,6 +288,19 @@ def main() -> int:
     inject_venv_path(root)
 
     os.chdir(root)
+
+    if os.name == "nt":
+        # On Windows, os.execv is implemented as "spawn child + exit parent",
+        # so the originally-spawned python.exe PID dies while a different PID
+        # runs the Go binary. Claude Code / Codex track the original PID and
+        # report the MCP server as failed. Stay alive as a thin shim instead;
+        # stdio handles are inherited by the child via CreateProcess.
+        try:
+            completed = subprocess.run([str(binary), *sys.argv[1:]])
+        except KeyboardInterrupt:
+            return 130
+        return completed.returncode
+
     os.execv(str(binary), [str(binary), *sys.argv[1:]])
     return 0
 
