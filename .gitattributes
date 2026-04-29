@@ -1,0 +1,19 @@
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+bin/ida-mcp-server-* binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+
+src/samples/* binary
+*.i64 binary
+*.idb binary
+*.id0 binary
+*.id1 binary
+*.id2 binary
+*.nam binary
+*.til binary

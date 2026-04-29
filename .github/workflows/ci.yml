@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Go, consistency, and plugin metadata
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run Go tests
+        working-directory: src
+        run: go test ./internal/... ./ida/...
+
+      - name: Run consistency checks
+        working-directory: src
+        run: bash scripts/consistency.sh
+
+      - name: Validate plugin JSON
+        run: |
+          python - <<'PY'
+          import json
+          for path in [
+              ".codex-plugin/plugin.json",
+              ".codex-plugin/mcp.json",
+              ".claude-plugin/plugin.json",
+              ".agents/plugins/marketplace.json",
+              ".claude/settings.json",
+              "config/config.example.json",
+              "src/config.example.json",
+          ]:
+              with open(path, encoding="utf-8") as fh:
+                  json.load(fh)
+              print(f"ok {path}")
+          PY
+
+      - name: Verify plugin runtime sync
+        run: |
+          diff -ru --exclude='__pycache__' src/python/worker python/worker
+          diff -u src/python/requirements.txt python/requirements.txt
+
+      - name: Smoke-test plugin launcher
+        run: python scripts/launch.py version
+
+      - name: Smoke-test source launcher
+        working-directory: src
+        run: |
+          go build -trimpath -ldflags '-s -w' -o bin/ida-mcp-server ./cmd/ida-mcp-server
+          python scripts/launch.py version

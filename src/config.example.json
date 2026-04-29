@@ -1,0 +1,8 @@
+{
+  "port": 17300,
+  "session_timeout_minutes": 240,
+  "auto_save_interval_minutes": 5,
+  "max_concurrent_sessions": 0,
+  "python_worker_path": "python/worker/server.py",
+  "debug": false
+}

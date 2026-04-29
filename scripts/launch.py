@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """
-Cross-platform launcher for ida-mcp-server.
+Self-contained plugin launcher for ida-headless-mcp.
 
-Picks the prebuilt binary under ``bin/`` that matches the current OS and
-architecture and execs it with the supplied arguments. The repository ships
-with binaries for windows/amd64, linux/amd64, linux/arm64, darwin/amd64, and
-darwin/arm64. If the matching binary isn't present, the launcher exits with a
-clear error - it never falls back to PATH lookup or attempts to build.
+The plugin package owns its prebuilt binaries and Python worker runtime. It
+does not search for or depend on the source checkout at runtime.
 """
 
 from __future__ import annotations
@@ -17,20 +14,11 @@ import sys
 from pathlib import Path
 
 
-def repo_root() -> Path:
-    """Return the plugin/repository root.
-
-    When loaded by Claude Code, ``CLAUDE_PLUGIN_ROOT`` points at the plugin
-    directory. Otherwise fall back to the script's parent's parent.
-    """
-    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
-    if plugin_root:
-        return Path(plugin_root)
+def plugin_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
 def detect_platform() -> tuple[str, str]:
-    """Return (goos, goarch) tuple matching Go's GOOS/GOARCH naming."""
     system = sys.platform
     if system.startswith("win"):
         goos = "windows"
@@ -61,22 +49,20 @@ def binary_path(root: Path) -> Path:
 
 
 def main() -> int:
-    root = repo_root()
+    root = plugin_root()
     binary = binary_path(root)
 
     if not binary.is_file():
         goos, goarch = detect_platform()
         print(
-            f"[ida-headless-mcp] Prebuilt binary not found: {binary}\n"
+            f"[ida-headless-mcp] plugin binary not found: {binary}\n"
             f"  Detected platform: {goos}/{goarch}\n"
-            f"  Available binaries are committed under {root / 'bin'}.\n"
-            f"  If your platform isn't shipped, build from source:\n"
-            f"    cd \"{root}\" && go build -o \"{binary}\" ./cmd/ida-mcp-server",
+            f"  Rebuild plugin binaries from the source checkout with:\n"
+            f"    cd src && make prebuilt",
             file=sys.stderr,
         )
         return 1
 
-    # Restore +x if the bundled binary lost its mode during clone or download.
     if os.name != "nt" and not os.access(str(binary), os.X_OK):
         try:
             binary.chmod(binary.stat().st_mode | 0o111)
@@ -87,10 +73,10 @@ def main() -> int:
             )
             return 1
 
-    args = [str(binary), *sys.argv[1:]]
-    os.execv(str(binary), args)
-    return 0  # unreachable
+    os.chdir(root)
+    os.execv(str(binary), [str(binary), *sys.argv[1:]])
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

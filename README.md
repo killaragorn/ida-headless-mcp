@@ -4,45 +4,46 @@ Headless IDA Pro binary analysis via Model Context Protocol. Go orchestrates mul
 
 ## Quick start
 
+The easiest path is to install the plugin, let the MCP client start it over stdio, then run the one-time `idalib` setup. This repository root is the plugin root: plugin manifests, skills, commands, launcher, bundled Python runtime, and prebuilt Go binaries live in top-level plugin subdirectories. Go/Python source code and development-only files live under `src/`. Go is only required if you build from source.
+
 ### Install as a Claude Code plugin
 
-```
+```text
 /plugin marketplace add killaragorn/ida-headless-mcp
 /plugin install ida-headless-mcp@ida-headless-mcp
 ```
 
-Then `/mcp` to confirm `ida-headless` is connected. The repo ships **prebuilt Go binaries for Windows/Linux/macOS (amd64 + arm64)** under `bin/`, so the plugin works immediately after install.
+Initialize IDA's Python library once per machine:
 
-You still need to activate idalib once per machine before opening a binary:
-
-```
+```text
 /ida-init
+/ida-status
+/mcp
 ```
 
-(or run `python scripts/launch.py init` from the plugin directory). This step detects IDA, installs the `idapro` Python package, and installs the Python worker dependencies. It does **not** rebuild the binary — only the dependency setup. Requires Python 3.10+ and IDA Pro 9.0+ / Essential 9.2+.
+`/ida-init` detects IDA, installs the `idapro` Python package, and installs Python worker dependencies. It uses the bundled binary and does not rebuild it by default. Requirements: Python 3.10+ and IDA Pro 9.0+ or IDA Essential 9.2+.
 
 ### Install as a Codex plugin (marketplace)
 
-```
+```bash
 codex plugin marketplace add killaragorn/ida-headless-mcp
 ```
 
-The bundled `bin/ida-mcp-server-<os>-<arch>[.exe]` binaries are picked up automatically by `scripts/launch.py`, so the MCP server is ready as soon as the marketplace install completes.
+Restart or refresh Codex, then enable/install `ida-headless-mcp` from the marketplace entry if Codex prompts for it. The marketplace entry points at the current repository root, whose manifest declares an `ida-headless` stdio MCP server that runs `python ./scripts/launch.py --stdio`.
 
-Finish the one-time idalib setup (no Go build required - binary is prebuilt):
+Finish the one-time `idalib` setup from the plugin directory, or ask Codex to use the bundled `ida-init` skill:
 
 ```bash
-# inside the cloned plugin directory:
+cd ida-headless-mcp
 python scripts/launch.py init --skip-build
 ```
 
-Or just call the binary directly:
+Check setup with the bundled status skill or manually:
 
 ```bash
-./bin/ida-mcp-server-<os>-<arch> init --skip-build
+python scripts/launch.py version
+codex mcp list
 ```
-
-The plugin manifest declares an `ida-headless` stdio MCP server pointing at `./scripts/launch.py`. Codex resolves the relative `cwd` to the cloned plugin directory, so the launcher finds the bundled binary automatically.
 
 ### Install for Codex CLI without the marketplace
 
@@ -51,37 +52,39 @@ If you'd rather skip the marketplace and register the server directly:
 ```bash
 git clone https://github.com/killaragorn/ida-headless-mcp.git
 cd ida-headless-mcp
-go run ./cmd/ida-mcp-server init
-codex mcp add ida-headless -- "$(pwd)/bin/ida-mcp-server" --stdio
+python scripts/launch.py init --skip-build
+python scripts/launch.py print-config codex-add
 ```
 
-`codex mcp list` should now show `ida-headless`. Print platform-specific snippets at any time with:
+Run the printed `codex mcp add ...` command. It points Codex at the plugin package's platform-specific prebuilt binary, for example `bin/ida-mcp-server-windows-amd64.exe` on Windows.
+
+Print client snippets at any time with:
 
 ```bash
-ida-mcp-server print-config claude-desktop
-ida-mcp-server print-config claude-code
-ida-mcp-server print-config codex
-ida-mcp-server print-config codex-add
+python scripts/launch.py print-config claude-desktop
+python scripts/launch.py print-config claude-code
+python scripts/launch.py print-config codex
+python scripts/launch.py print-config codex-add
 ```
 
 ### Use as a standalone HTTP server
 
-`bin/ida-mcp-server` (no flags) listens on `http://localhost:17300/` (Streamable HTTP) and `http://localhost:17300/sse` (SSE). See [Standalone HTTP server](#standalone-http-server) below for client config.
+Run `python scripts/launch.py` with no flags to start the plugin's prebuilt HTTP server. It listens on `http://localhost:17300/` (Streamable HTTP) and `http://localhost:17300/sse` (SSE). See [Standalone HTTP server](#standalone-http-server) below for client config.
 
 ## Architecture
 
 ```
 ┌─────────────────┐
-│  MCP Client     │  Claude Desktop, Claude Code, CLI
-│  (HTTP/SSE)     │
+│  MCP Client     │  Claude Desktop, Claude Code, Codex CLI
+│  (stdio/HTTP)   │
 └────────┬────────┘
-         │ http://localhost:17300/
+         │ stdio or http://localhost:17300/
          ▼
 ┌─────────────────┐
 │   Go Server     │  Session registry, worker manager, watchdog
 │   (MCP Tools)   │
 └────────┬────────┘
-         │ Connect RPC over Unix socket
+         │ Connect RPC over TCP loopback
          ▼
 ┌─────────────────┐
 │ Python Worker   │  IDA + idalib (one per session)
@@ -99,48 +102,44 @@ ida-mcp-server print-config codex-add
 
 ## Prerequisites
 
+For plugin users:
+
 1. **IDA Pro 9.0+ or IDA Essential 9.2+**
+2. **Python 3.10+** available as `python` or `python3`
+3. Run `ida-init` once to install/activate `idalib` and Python worker dependencies.
 
-2. **idalib**: install and activate:
+For source builds and development, also install **Go 1.21+**. Protobuf tools are only needed when regenerating protobuf code:
 
    ```bash
-   ./scripts/setup_idalib.sh
-   ```
-
-   See [IDA as a Library documentation](https://docs.hex-rays.com/user-guide/idalib).
-
-3. **Go 1.21+** with protoc tools:
-   ```bash
+   cd src
    make install-tools
    ```
 
-4. **Python 3.10+** with dependencies:
-   ```bash
-   pip3 install -r python/requirements.txt
-   ```
+Optional metadata import helpers:
 
-5. **Optional: [Il2CppDumper](https://github.com/Perfare/Il2CppDumper)** for Unity game analysis
+- [Il2CppDumper](https://github.com/Perfare/Il2CppDumper) for Unity game analysis
+- [unflutter](https://github.com/zboralski/unflutter) for Flutter/Dart app analysis
 
-6. **Optional: [unflutter](https://github.com/zboralski/unflutter)** for Flutter/Dart app analysis
-   ```bash
-   # Install unflutter (provides flutter_meta.json for import_flutter)
-   git clone https://github.com/zboralski/unflutter.git
-   cd unflutter && make install
-   ```
+```bash
+git clone https://github.com/zboralski/unflutter.git
+cd unflutter && make install
+```
 
-## Installation
+## Source build
 
 ```bash
 git clone <repo-url>
 cd ida-headless-mcp
+cd src
 make setup
 ```
 
-This runs idalib setup, installs Python dependencies, and builds the server.
+This runs idalib setup, installs Python dependencies, and builds a source-tree `src/bin/ida-mcp-server`.
 
 For manual setup or troubleshooting:
 
 ```bash
+cd src
 ./scripts/setup_idalib.sh   # Setup idalib (requires IDA Pro/Essential 9.x)
 make install-python         # Install Python dependencies
 make build                  # Build Go server
@@ -149,10 +148,10 @@ make build                  # Build Go server
 ## Standalone HTTP server
 
 ```bash
-./bin/ida-mcp-server
+python scripts/launch.py
 ```
 
-Listens on port 17300 (configurable via `config.json`, env, or `--port`):
+This starts the plugin package's platform-specific prebuilt binary. Source builds can use `cd src && make build` followed by `python src/scripts/launch.py`. The server listens on port 17300 (configurable via `config.json`, env, or `--port`):
 
 - Streamable HTTP (recommended): `http://localhost:17300/`
 - SSE compatibility endpoint: `http://localhost:17300/sse`
@@ -172,11 +171,17 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) /
 }
 ```
 
-Restart Claude Desktop after editing. For stdio mode, see `ida-mcp-server print-config claude-desktop`.
+Restart Claude Desktop after editing. For stdio mode, run `python scripts/launch.py print-config claude-desktop`.
 
 ### Configure Claude Code (manual, without `/plugin install`)
 
-Copy `.claude/settings.json` to `~/.claude/settings.json` to grant access to all IDA MCP tools.
+Prefer the plugin install in Quick start. For manual stdio configuration, run:
+
+```bash
+python scripts/launch.py print-config claude-code
+```
+
+Copy `.claude/settings.json` to `~/.claude/settings.json` only if you want Claude Code to pre-allow all IDA MCP tools.
 
 ### Basic Workflow
 
@@ -217,10 +222,29 @@ Use `tools/list` via MCP to see all available tools.
 
 ## Configuration
 
+Configuration is optional. The server starts with safe defaults when `config.json` is absent. For plugin runtime overrides, copy the plugin example file and edit the root-local copy:
+
+```bash
+cp config/config.example.json config.json
+```
+
+`config.json` is intentionally ignored by Git. Precedence is:
+
+1. Built-in defaults
+2. `config.json` or `--config <path>`
+3. `IDA_MCP_*` environment variables
+4. CLI flags
+
+For source-tree local overrides, copy the source example inside `src/`:
+
+```bash
+cp src/config.example.json src/config.json
+```
+
 Command line flags:
 
 ```bash
-./bin/ida-mcp-server \
+python scripts/launch.py \
   --port 17300 \
   --max-sessions 10 \
   --session-timeout 4h \
@@ -243,31 +267,28 @@ IDA_MCP_DEBUG=1
 ### Build
 
 ```bash
-make build          # Build Go server
+cd src
+make build          # Build Go server under src/bin/
+make plugin-sync    # Copy source Python worker runtime into the repository-root plugin package
+make prebuilt       # Sync runtime and rebuild root bin/ plugin binaries for all supported platforms
 make proto          # Regenerate protobuf
 make test           # Run tests + consistency checks
 make restart        # Kill, rebuild, restart server
 make clean          # Clean build artifacts
 ```
 
-### Testing
-
-Install test dependencies:
-```bash
-pip3 install -r requirements-test.txt
-```
-
 Run tests:
 ```bash
+cd src
 make test           # All tests
-pytest tests/ -v    # Python tests only
-go test ./...       # Go tests only
+go test ./internal/... ./ida/...
 ```
 
 ### Interactive Testing
 
 Use MCP Inspector:
 ```bash
+cd src
 make run            # Start server
 make inspector      # Launch inspector at http://localhost:5173
 ```
@@ -276,33 +297,41 @@ make inspector      # Launch inspector at http://localhost:5173
 
 ```
 ida-headless-mcp/
-├── cmd/ida-mcp-server/   # Go MCP server entry point
-├── internal/
-│   ├── server/           # MCP tool handlers
-│   ├── session/          # Session registry
-│   └── worker/           # Worker process manager
-├── proto/                # Protobuf definitions
-├── python/worker/        # Python worker (idalib wrapper)
-├── contrib/il2cpp/       # Il2CppDumper helpers (MIT)
-└── tests/                # Test suites
+├── .codex-plugin/        # Codex plugin manifest and MCP config
+├── .claude-plugin/       # Claude Code plugin manifest
+├── .claude/              # Optional Claude Code allow-list settings
+├── bin/                  # Committed plugin prebuilt binaries
+├── commands/             # Claude slash-command docs
+├── config/               # Example plugin runtime config
+├── python/worker/        # Bundled plugin Python worker runtime
+├── scripts/              # Self-contained plugin launcher
+├── skills/               # Codex setup/status skills
+└── src/
+    ├── cmd/ida-mcp-server/   # Go MCP server entry point
+    ├── internal/             # MCP handlers, session store, worker manager
+    ├── proto/                # Protobuf definitions
+    ├── python/worker/        # Source Python worker
+    ├── python/tests/         # Python worker tests
+    ├── contrib/il2cpp/       # Il2CppDumper helpers (MIT)
+    └── scripts/              # Source-tree utilities and source launcher
 ```
 
 ### Adding New Tools
 
-1. Add RPC to `proto/ida/worker/v1/ida_service.proto`
-2. Regenerate: `make proto`
-3. Implement in `python/worker/ida_wrapper.py`
-4. Add handler in `python/worker/connect_server.py`
-5. Register MCP tool in `internal/server/server.go`
+1. Add RPC to `src/proto/ida/worker/v1/service.proto`
+2. Regenerate from `src/`: `make proto`
+3. Implement in `src/python/worker/ida_wrapper.py`
+4. Add handler in `src/python/worker/connect_server.py`
+5. Register MCP tool in `src/internal/server/server.go`
 
 ## Session Lifecycle
 
 1. Client calls `open_binary(path)`
-2. Go creates session in registry (UUID)
-3. Go spawns Python worker subprocess
-4. Worker creates Unix socket at `/tmp/ida-worker-{id}.sock`
+2. Go creates a short session ID in the registry
+3. Go allocates a loopback TCP port and spawns a Python worker subprocess
+4. Worker listens on `127.0.0.1:<dynamic-port>` and writes a ready marker
 5. Worker opens IDA database with idalib
-6. Go creates Connect RPC clients over socket
+6. Go creates Connect RPC clients over the loopback address
 7. Subsequent tool calls proxy to worker via Connect
 8. Watchdog monitors idle time (default: 4 hours)
 9. On timeout or `close_binary`: save database, kill worker, cleanup
@@ -312,18 +341,18 @@ ida-headless-mcp/
 
 **Worker fails to start:**
 ```bash
-python3 -c "import idapro; print('OK')"
+python -c "import idapro; print('OK')"
 ```
-If this fails, run `./scripts/setup_idalib.sh`
+If this fails, run `/ida-init` in Claude Code or `python scripts/launch.py init --skip-build` from the repository root.
 
-**Socket timeout:**
-Check Python worker logs. Worker may have crashed during init.
+**Worker connection timeout:**
+Check Python worker logs. The worker may have crashed during IDA startup, failed to import `idapro`, or been blocked from binding a loopback port.
 
 **Port already in use:**
 ```bash
 lsof -ti:17300 | xargs kill
 # or use a different port
-./bin/ida-mcp-server --port 17301
+python scripts/launch.py --port 17301
 ```
 
 **Session not found:**

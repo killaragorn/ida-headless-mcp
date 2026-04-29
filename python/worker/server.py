@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Python Connect RPC Worker for IDA Headless Analysis
-Serves Connect RPC over Unix domain socket
+Serves Connect RPC over TCP loopback
 """
 
 import argparse
