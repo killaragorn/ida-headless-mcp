@@ -26,7 +26,7 @@ parse_and_check() {
         # Extract rule name
         if [[ "$line" =~ ^-[[:space:]]+name:[[:space:]]+(.+)$ ]]; then
             current_rule="${BASH_REMATCH[1]}"
-            ((total_rules++))
+            total_rules=$((total_rules + 1))
             continue
         fi
 
@@ -36,18 +36,18 @@ parse_and_check() {
             local pattern="${BASH_REMATCH[2]}"
             local full_path="$REPO_ROOT/$file"
 
-            ((total_checks++))
+            total_checks=$((total_checks + 1))
 
             if [[ ! -f "$full_path" ]]; then
                 echo "FAIL: $current_rule - file not found: $file"
-                ((failed++))
+                failed=$((failed + 1))
                 continue
             fi
 
             if ! grep -qE "$pattern" "$full_path"; then
                 echo "FAIL: $current_rule - pattern not found in $file"
                 echo "      Pattern: /$pattern/"
-                ((failed++))
+                failed=$((failed + 1))
             fi
         fi
     done < "$RULES_FILE"
