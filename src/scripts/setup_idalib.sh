@@ -8,6 +8,30 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+# Resolve plugin-local venv python; fall back to system python3 with --system.
+SYSTEM_PYTHON=0
+for arg in "$@"; do
+    case "$arg" in
+        --system) SYSTEM_PYTHON=1 ;;
+    esac
+done
+
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+VENV_PY="$REPO_ROOT/.venv/bin/python"
+
+if [ "$SYSTEM_PYTHON" -eq 1 ]; then
+    PY="python3"
+elif [ -x "$VENV_PY" ]; then
+    PY="$VENV_PY"
+else
+    echo -e "${RED}Plugin venv not found at $VENV_PY${NC}"
+    echo "Run 'python3 scripts/launch.py version' once to bootstrap it,"
+    echo "or pass --system to install idalib into the global python."
+    exit 1
+fi
+
+echo -e "${GREEN}Using Python: $PY${NC}"
+
 # Find IDA installation: check IDA_PATH env, then scan /Applications for latest version
 find_ida() {
     if [ -n "$IDA_PATH" ] && [ -d "$IDA_PATH" ]; then
@@ -52,14 +76,14 @@ echo "Installing idapro Python package..."
 WHL=$(ls "$IDALIB_DIR/python/"*.whl 2>/dev/null | head -1)
 if [ -n "$WHL" ]; then
     # IDA 9.3+: wheel package
-    if pip3 install --force-reinstall "$WHL" 2>/dev/null; then
+    if "$PY" -m pip install --force-reinstall "$WHL" 2>/dev/null; then
         echo -e "${GREEN}Installed $(basename "$WHL")${NC}"
     else
         echo -e "${YELLOW}pip3 install failed for $WHL${NC}"
     fi
 elif [ -f "$IDALIB_DIR/python/setup.py" ]; then
     # IDA 9.2: setup.py
-    if pip3 install "$IDALIB_DIR/python" 2>/dev/null; then
+    if "$PY" -m pip install "$IDALIB_DIR/python" 2>/dev/null; then
         echo -e "${GREEN}Installed idapro via setup.py${NC}"
     else
         echo -e "${YELLOW}pip3 install failed${NC}"
@@ -80,7 +104,7 @@ if [ ! -f "$ACTIVATE_SCRIPT" ]; then
     exit 1
 fi
 
-if python3 "$ACTIVATE_SCRIPT" -d "$IDA_PATH"; then
+if "$PY" "$ACTIVATE_SCRIPT" -d "$IDA_PATH"; then
     echo -e "${GREEN}idalib activated${NC}"
 else
     echo -e "${RED}Failed to activate idalib${NC}"
@@ -91,7 +115,7 @@ echo
 
 # Verify
 echo "Testing idalib import..."
-if python3 -c "import idapro; v=idapro.get_library_version(); print(f'idalib {v[0]}.{v[1]} ready')" 2>/dev/null; then
+if "$PY" -c "import idapro; v=idapro.get_library_version(); print(f'idalib {v[0]}.{v[1]} ready')" 2>/dev/null; then
     echo -e "${GREEN}Setup complete${NC}"
 else
     echo -e "${RED}Failed to import idapro${NC}"

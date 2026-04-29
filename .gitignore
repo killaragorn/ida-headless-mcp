@@ -9,6 +9,9 @@ src/bin/
 config.json
 src/config.json
 
+# Plugin-local Python venv created by scripts/launch.py on first run
+.venv/
+
 # Python
 *.pyc
 __pycache__/
