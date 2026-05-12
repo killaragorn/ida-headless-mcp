@@ -9,7 +9,7 @@
       "name": "ida-headless-mcp",
       "source": "./",
       "description": "Headless IDA Pro binary analysis via MCP - 52 tools for reverse engineering (functions, decompilation, xrefs, structs, IL2CPP / Flutter metadata import).",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "category": "coding",
       "license": "MIT",
       "homepage": "https://github.com/killaragorn/ida-headless-mcp",
