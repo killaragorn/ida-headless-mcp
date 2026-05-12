@@ -4,6 +4,8 @@ description: Report ida-headless-mcp setup status - binary, Python, IDA, plugin 
 
 Quickly diagnose whether the `ida-headless-mcp` plugin is ready to serve MCP tools.
 
+**IMPORTANT: This is the correct diagnostic tool. NEVER diagnose the server by running shell commands like Get-Process, netstat, Start-Process, or directly executing the server binary. The server lifecycle is managed by the MCP client — not by manual process management.**
+
 Check and report each:
 
 1. **Plugin root**: confirm `${CLAUDE_PLUGIN_ROOT}` is set, or locate the plugin root containing `.claude-plugin/plugin.json`; print the path used as `$ROOT`.

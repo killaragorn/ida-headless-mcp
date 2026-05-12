@@ -22,29 +22,34 @@ import (
 
 const version = "0.3.0"
 
-const serverInstructions = `This MCP server exposes IDA Pro headless binary analysis. The server lifecycle is managed automatically by the MCP client (Claude Code, Codex, etc.) — NEVER attempt to start, stop, or manage the server process manually via shell commands.
+const serverInstructions = `This MCP server exposes IDA Pro headless binary analysis.
+
+## ABSOLUTE PROHIBITIONS
+
+- NEVER run shell commands (PowerShell, Bash) to start, stop, restart, or diagnose this server. No Start-Process, Get-Process, netstat, Get-NetTCPConnection, or direct binary execution. The server lifecycle is fully managed by the MCP client.
+- NEVER guess or construct the server binary path. You do not need to know it.
+- NEVER try to listen on port 17300 or any port manually.
 
 ## Workflow
 
-1. Call open_binary with the absolute path to the target binary. Use forward slashes (C:/Users/...) even on Windows. This returns a session_id.
-2. For large or unknown binaries, call run_auto_analysis with the session_id and wait for it to complete before querying results.
-3. Use any analysis tool (get_functions, get_decompiled_func, get_strings, etc.) with the session_id.
-4. Call close_binary when done (or let the session expire after the idle timeout).
+1. Call open_binary with the ABSOLUTE path to the target binary. Use FORWARD SLASHES on all platforms (C:/Users/me/target.exe, not C:\Users\me\target.exe). Returns a session_id.
+2. For large or unknown binaries, call run_auto_analysis with the session_id first.
+3. Use analysis tools (get_functions, get_decompiled_func, get_strings, etc.) with the session_id.
+4. Call close_binary when done.
 
-## Important rules
+## Parameter conventions
 
-- Every tool except open_binary and list_sessions requires a session_id parameter. Always obtain one from open_binary first.
-- open_binary reuses an existing session if the same binary path is already open — you will get back the existing session_id, not an error.
-- Binary paths must be absolute. Use forward slashes on all platforms (e.g. C:/path/to/file, not C:\path\to\file).
-- Addresses are hex strings with 0x prefix (e.g. "0x100003a5c"). All tools that accept an address use this format.
-- List tools (get_functions, get_strings, get_imports, get_exports, get_globals) support offset/limit pagination. Default limit is 1000, max is 10000.
-- get_functions, get_strings, and get_globals accept an optional regex parameter for server-side filtering.
-- For decompilation, pass a function start address to get_decompiled_func — use get_functions to discover addresses first.
+- session_id: required by every tool except open_binary and list_sessions.
+- Addresses: hex strings with 0x prefix (e.g. "0x100003a5c").
+- Paths: absolute, forward slashes on all platforms.
+- Pagination: offset >= 0, limit defaults to 1000, max 10000. get_functions/get_strings/get_globals support regex filtering.
+- open_binary reuses an existing session if the same path is already open.
 
-## Troubleshooting
+## When things go wrong
 
-If a tool call returns a connection or session error, call list_sessions to check if the session is still alive. If not, call open_binary again — it will create a new session.
-Do NOT try to diagnose or fix the server by running shell commands, inspecting processes, or restarting binaries. If the MCP connection itself is broken, tell the user to reconnect the plugin.`
+- Tool returns connection/session error → call list_sessions. If session is gone, call open_binary again.
+- MCP connection itself is broken → tell the user to reconnect the plugin from the /mcp menu or restart Claude Code. Do NOT attempt shell-based fixes.
+- Setup problems (idalib missing, dependencies broken) → tell the user to run /ida-init.`
 
 var (
 	configPath   = flag.String("config", "config.json", "Path to server config")

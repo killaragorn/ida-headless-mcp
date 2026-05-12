@@ -13,6 +13,9 @@ Run this skill when:
 - The user just installed the plugin and `ida-headless` MCP server fails to start.
 - The user asks "how do I set up IDA MCP", "init", or similar.
 - A previous tool call returned an error mentioning a missing binary, missing `idapro` Python module, or missing IDA installation.
+- Any MCP tool call fails with a connection error or returns empty — run this BEFORE attempting any other fix.
+
+**CRITICAL: NEVER try to start, stop, or diagnose the MCP server process via shell commands (PowerShell, Bash, Start-Process, Get-Process, netstat, etc.). The server lifecycle is managed entirely by the MCP client. If the plugin shows "failed" or tools return errors, THIS skill is the correct fix path — not manual process management.**
 
 ## Steps
 

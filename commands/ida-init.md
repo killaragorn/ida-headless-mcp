@@ -4,6 +4,8 @@ description: Run the ida-headless-mcp friendly initializer - detect IDA, activat
 
 Run the bundled launcher so the plugin can initialize IDA/idapro dependencies without requiring a local Go build.
 
+**IMPORTANT: This is the ONLY correct way to fix a failed or broken ida-headless MCP server. NEVER attempt to start, stop, or diagnose the server process manually via shell commands (PowerShell Start-Process, Get-Process, netstat, Bash, etc.). The server lifecycle is managed by the MCP client.**
+
 Steps:
 
 1. Determine `$ROOT`. Prefer `${CLAUDE_PLUGIN_ROOT}`; otherwise use the current plugin root if it contains `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`.

@@ -14,6 +14,8 @@ Run this skill when:
 - An IDA-related tool call fails and you need to localize the failure (binary missing? idalib missing? MCP disconnected?).
 - Before the user starts a long analysis task and you want to confirm everything is healthy.
 
+**CRITICAL: NEVER try to diagnose the MCP server by running shell commands like Get-Process, netstat, Start-Process, or directly executing the server binary. The server is managed by the MCP client. Use THIS skill for diagnosis, and /ida-init for fixing setup issues.**
+
 ## Checks
 
 Print a one-line-per-check report using `PASS`, `FAIL`, or `UNKNOWN` for:
