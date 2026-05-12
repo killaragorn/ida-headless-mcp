@@ -148,17 +148,17 @@ func ApplyEnvOverrides(cfg *Config) {
 func (s *Server) RegisterTools(mcpServer *mcp.Server) {
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name:        "open_binary",
-		Description: "Open binary file for analysis",
+		Description: "Open a binary file and start an IDA analysis session. Returns a session_id required by all other tools. If the same binary is already open, returns the existing session_id. Path must be absolute with forward slashes (e.g. C:/Users/me/bin/target.exe).",
 	}, s.openBinary)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name:        "close_binary",
-		Description: "Close analysis session",
+		Description: "Close an analysis session and save the IDA database. The session_id becomes invalid after this call.",
 	}, s.closeBinary)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name:        "list_sessions",
-		Description: "List active analysis sessions",
+		Description: "List all active analysis sessions with their binary paths and session IDs. Does not require a session_id.",
 	}, s.listSessions)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
@@ -183,12 +183,12 @@ func (s *Server) RegisterTools(mcpServer *mcp.Server) {
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name:        "get_decompiled_func",
-		Description: "Get decompiled pseudocode",
+		Description: "Decompile a function and return Hex-Rays pseudocode. Pass the function start address (use get_functions to discover addresses).",
 	}, s.getDecompiled)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name:        "get_functions",
-		Description: "List all functions",
+		Description: "List functions in the binary. Supports offset/limit pagination and optional regex filter. Returns function name, start address, and size.",
 	}, s.getFunctions)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
@@ -203,7 +203,7 @@ func (s *Server) RegisterTools(mcpServer *mcp.Server) {
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name:        "get_strings",
-		Description: "Get all strings",
+		Description: "List strings found in the binary. Supports offset/limit pagination and optional regex filter.",
 	}, s.getStrings)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
@@ -233,7 +233,7 @@ func (s *Server) RegisterTools(mcpServer *mcp.Server) {
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name:        "run_auto_analysis",
-		Description: "Force IDA auto-analysis to finish (plan_and_wait)",
+		Description: "Wait for IDA auto-analysis to complete (blocking). Call this after open_binary on large or unknown binaries before querying analysis results. Returns when analysis is finished.",
 	}, s.runAutoAnalysis)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{

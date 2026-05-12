@@ -20,7 +20,31 @@ import (
 	"github.com/zboralski/ida-headless-mcp/internal/worker"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
+
+const serverInstructions = `This MCP server exposes IDA Pro headless binary analysis. The server lifecycle is managed automatically by the MCP client (Claude Code, Codex, etc.) — NEVER attempt to start, stop, or manage the server process manually via shell commands.
+
+## Workflow
+
+1. Call open_binary with the absolute path to the target binary. Use forward slashes (C:/Users/...) even on Windows. This returns a session_id.
+2. For large or unknown binaries, call run_auto_analysis with the session_id and wait for it to complete before querying results.
+3. Use any analysis tool (get_functions, get_decompiled_func, get_strings, etc.) with the session_id.
+4. Call close_binary when done (or let the session expire after the idle timeout).
+
+## Important rules
+
+- Every tool except open_binary and list_sessions requires a session_id parameter. Always obtain one from open_binary first.
+- open_binary reuses an existing session if the same binary path is already open — you will get back the existing session_id, not an error.
+- Binary paths must be absolute. Use forward slashes on all platforms (e.g. C:/path/to/file, not C:\path\to\file).
+- Addresses are hex strings with 0x prefix (e.g. "0x100003a5c"). All tools that accept an address use this format.
+- List tools (get_functions, get_strings, get_imports, get_exports, get_globals) support offset/limit pagination. Default limit is 1000, max is 10000.
+- get_functions, get_strings, and get_globals accept an optional regex parameter for server-side filtering.
+- For decompilation, pass a function start address to get_decompiled_func — use get_functions to discover addresses first.
+
+## Troubleshooting
+
+If a tool call returns a connection or session error, call list_sessions to check if the session is still alive. If not, call open_binary again — it will create a new session.
+Do NOT try to diagnose or fix the server by running shell commands, inspecting processes, or restarting binaries. If the MCP connection itself is broken, tell the user to reconnect the plugin.`
 
 var (
 	configPath   = flag.String("config", "config.json", "Path to server config")
@@ -129,8 +153,11 @@ func runServe() {
 
 	mcpServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "ida-headless",
+		Title:   "IDA Headless MCP Server",
 		Version: version,
-	}, nil)
+	}, &mcp.ServerOptions{
+		Instructions: serverInstructions,
+	})
 	srv.RegisterTools(mcpServer)
 
 	if *stdioFlag {
