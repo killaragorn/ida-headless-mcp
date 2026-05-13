@@ -26,18 +26,26 @@ const serverInstructions = `IDA Pro headless binary analysis server.
 
 NEVER run shell commands to start, stop, or diagnose this server. No Start-Process, Get-Process, netstat, or direct binary execution. The server is managed by the MCP client.
 
-Workflow: open_binary (absolute path, forward slashes, e.g. C:/Users/me/target.exe) → run_auto_analysis → analysis tools → close_binary.
+## MANDATORY first step
 
-Rules:
-- All tools except open_binary and list_sessions require session_id from open_binary.
+Call preflight ONCE at the start of every new conversation, before calling any other tool. It checks idalib availability and auto-initializes if needed. Only proceed to open_binary after preflight returns OK.
+
+## Workflow
+
+preflight → open_binary (absolute path, forward slashes, e.g. C:/Users/me/target.exe) → run_auto_analysis → analysis tools → close_binary.
+
+## Rules
+
+- All tools except preflight, open_binary, and list_sessions require session_id from open_binary.
 - open_binary reuses existing sessions for the same path.
 - Addresses: hex with 0x prefix (e.g. "0x100003a5c").
 - Pagination: offset >= 0, limit default 1000 max 10000. get_functions/get_strings/get_globals support regex.
 
-Errors:
+## Errors
+
+- preflight returns FAILED → tell user to run /ida-init --ida-path "<IDA install dir>".
 - Session/connection error → call list_sessions, then open_binary again if needed.
 - MCP connection broken → tell user to reconnect via /mcp or restart Claude Code.
-- Setup problem → tell user to run /ida-init to initialize IDA and dependencies.
 - NEVER attempt shell-based fixes.`
 
 var (

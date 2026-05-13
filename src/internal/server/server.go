@@ -147,6 +147,11 @@ func ApplyEnvOverrides(cfg *Config) {
 
 func (s *Server) RegisterTools(mcpServer *mcp.Server) {
 	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name:        "preflight",
+		Description: "Check if IDA and idalib are ready, and auto-initialize if needed. Call this ONCE at the start of every new conversation BEFORE calling any other tool. Returns OK if ready, or an actionable error if setup is incomplete.",
+	}, s.preflight)
+
+	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name:        "open_binary",
 		Description: "Open a binary file and start an IDA analysis session. Returns a session_id required by all other tools. If the same binary is already open, returns the existing session_id. Path must be absolute with forward slashes (e.g. C:/Users/me/bin/target.exe).",
 	}, s.openBinary)
