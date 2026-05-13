@@ -1,45 +1,52 @@
 ---
 name: ida-init
-description: Use when ida-headless-mcp needs first-run setup, IDA or idapro is missing, idalib activation fails, or a Claude Code/Codex plugin install needs initialization.
+description: "Use when: ida-headless MCP server shows 'failed' status, any ida-headless MCP tool call fails or returns empty/error, open_binary fails, idalib or idapro is missing, user asks to set up or initialize IDA MCP plugin. This is the ONLY correct fix for plugin startup failures — NEVER start/stop/diagnose the server via shell commands (Start-Process, Get-Process, netstat, etc.)."
 ---
 
 # ida-init
 
-Initialize `ida-headless-mcp` for Claude Code or Codex without assuming a locally built binary.
+Initialize the `ida-headless-mcp` plugin so the MCP server can start successfully.
 
-## When to use
+## CRITICAL RULES
 
-Run this skill when:
-- The user just installed the plugin and `ida-headless` MCP server fails to start.
-- The user asks "how do I set up IDA MCP", "init", or similar.
-- A previous tool call returned an error mentioning a missing binary, missing `idapro` Python module, or missing IDA installation.
-- Any MCP tool call fails with a connection error or returns empty — run this BEFORE attempting any other fix.
-
-**CRITICAL: NEVER try to start, stop, or diagnose the MCP server process via shell commands (PowerShell, Bash, Start-Process, Get-Process, netstat, etc.). The server lifecycle is managed entirely by the MCP client. If the plugin shows "failed" or tools return errors, THIS skill is the correct fix path — not manual process management.**
+- **NEVER** run shell commands to start, stop, or diagnose the MCP server process. No `Start-Process`, `Get-Process`, `netstat`, `Get-NetTCPConnection`, or direct binary execution. The server lifecycle is managed entirely by the MCP client (Claude Code / Codex).
+- **NEVER** guess or construct paths to `ida-mcp-server*.exe` or `launch.py` — always use `$ROOT/scripts/launch.py`.
+- When the plugin shows `× failed` or any MCP tool returns an error, run THIS skill — not shell commands.
 
 ## Steps
 
-1. Locate the plugin root. Prefer `CLAUDE_PLUGIN_ROOT` when set; otherwise find the directory containing `.codex-plugin/plugin.json` or `.claude-plugin/plugin.json`.
-2. From `$ROOT`, run the cross-platform launcher:
-   - `python scripts/launch.py init --skip-build`
-   - If `python` is unavailable, retry with `python3`.
-3. Stream the initializer output. It reports Python, IDA detection, idalib activation, and Python dependency status.
-4. Forward user-supplied flags verbatim. Useful flags:
-   - `--ida-path "/path/to/IDA"` to override IDA detection
-   - `--skip-ida`, `--skip-python`, `--skip-build` to skip individual steps
-5. After success, restart or refresh the MCP connection:
-   - Claude Code: run `/mcp` or restart Claude Code if it does not reconnect.
-   - Codex: start a new Codex session or run `codex mcp list` to confirm registration.
+1. **Locate `$ROOT`**: Use `${CLAUDE_PLUGIN_ROOT}` if set. Otherwise search for the nearest directory containing `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`.
 
-## Failure handling
+2. **Run the initializer**:
+   ```
+   python "$ROOT/scripts/launch.py" init --skip-build
+   ```
+   If `python` is unavailable, retry with `python3`.
 
-If a step fails, surface the actionable hint the initializer prints. Do not retry blindly. Common failures:
-- **No IDA found**: pass `--ida-path "<absolute path to IDA install dir>"` or set `IDA_PATH` env var.
-- **Prebuilt binary missing**: the installed plugin does not include this platform. Rebuild from the source checkout with `cd src && make prebuilt`, or install a plugin build that ships the platform.
-- **idalib import fails**: the IDA install is older than 9.0 (Pro) or 9.2 (Essential), or activation didn't run.
+3. **Forward user flags** verbatim if provided:
+   - `--ida-path "/path/to/IDA"` — override IDA auto-detection
+   - `--skip-ida` / `--skip-python` / `--skip-build` — skip individual steps
+   Always keep `--skip-build` for plugin installs (prebuilt binaries are already shipped).
 
-## Reference
+4. **Stream the output** to the user. Every step prints a checkmark or an actionable hint.
 
-- macOS IDA path example: `/Applications/IDA Pro 9.3.app/Contents/MacOS`
-- Windows IDA path example: `C:\Program Files\IDA Pro 9.2`
-- Linux IDA path example: `/opt/idapro-9.3` or `~/idapro-9.3`
+5. **After success**, tell the user to reconnect the MCP server:
+   - Claude Code: run `/mcp` and click Reconnect, or restart Claude Code.
+   - Codex: start a new session or run `codex mcp list` to confirm.
+
+## Common failures and fixes
+
+| Failure | Fix |
+|---|---|
+| `IDA installation not found` | Pass `--ida-path "<absolute path>"` or set `IDA_PATH` env var |
+| `idalib import fails` | IDA version is too old: need IDA Pro 9.0+ or IDA Essential 9.2+ |
+| `Prebuilt binary missing` | This platform is not shipped. Rebuild from source: `cd src && make prebuilt` |
+| `pip install fails` | Check network connectivity and Python version (need 3.10+) |
+
+## IDA path examples
+
+- Windows: `C:\Program Files\IDA Pro 9.3` or `F:\Tool\IDA Professional 9.3`
+- macOS: `/Applications/IDA Pro 9.3.app/Contents/MacOS`
+- Linux: `/opt/idapro-9.3` or `~/idapro-9.3`
+
+Do not silently proceed past errors — surface the actionable hint each failed step prints.

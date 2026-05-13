@@ -2,40 +2,6 @@
 
 项目级指引文件,用于在新会话中快速建立对本仓库的理解。
 
-## 使用 IDA MCP 工具的规则(AI 必读)
-
-本仓库同时也是一个 MCP 插件。当 `ida-headless` MCP server 已注册时,你可以直接调用 `open_binary`、`get_functions` 等 MCP 工具进行二进制分析。**请严格遵守以下规则**:
-
-### 绝对禁止
-
-- **绝对不要** 通过 shell 命令(PowerShell / Bash)手动启动、停止、重启 `ida-mcp-server` 进程。服务器生命周期由 MCP 客户端(Claude Code / Codex)自动管理。
-- **绝对不要** 运行 `Start-Process`、`Get-Process`、`netstat`、`Get-NetTCPConnection` 等命令来排查服务器状态。
-- **绝对不要** 直接执行 `bin/ida-mcp-server*.exe` 或 `scripts/launch.py` 来启动服务。
-- **绝对不要** 猜测二进制文件名——你不需要知道它叫什么,插件系统会处理。
-
-### 正确的工作流
-
-1. **直接调用 MCP 工具** `open_binary`,传入目标二进制的**绝对路径**,所有平台使用**正斜杠**(如 `C:/Users/me/target.exe`)。返回 `session_id`。
-2. 对大文件或未知二进制,调用 `run_auto_analysis` 等待 IDA 分析完成。
-3. 使用 `session_id` 调用任意分析工具(`get_functions`、`get_decompiled_func`、`get_strings` 等)。
-4. 完成后调用 `close_binary` 释放资源。
-
-### 出错时怎么办
-
-| 症状 | 正确做法 | 错误做法 |
-|---|---|---|
-| MCP 工具调用返回连接错误 | 告诉用户重连插件(`/mcp` 菜单中 Reconnect) | 用 shell 启动服务器 |
-| 插件状态显示 `× failed` | 运行 `/ida-init` 初始化依赖,然后重连 | 用 `Start-Process` 启动二进制 |
-| `open_binary` 返回空或失败 | 先运行 `/ida-status` 诊断,再根据提示修复 | 运行 `netstat` 查端口 |
-| 不确定插件是否就绪 | 运行 `/ida-status` 检查所有组件 | 运行 `Get-Process` 找进程 |
-
-### 参数约定
-
-- **session_id**:除 `open_binary` 和 `list_sessions` 外,所有工具都需要 `session_id`。
-- **地址**:十六进制字符串,带 `0x` 前缀(如 `"0x100003a5c"`)。
-- **路径**:绝对路径,使用正斜杠。Windows 路径示例:`C:/Users/xiaofeng/bin/target.exe`。
-- **分页**:`offset` ≥ 0,`limit` 默认 1000,上限 10000。`get_functions`/`get_strings`/`get_globals` 支持 `regex` 参数过滤。
-
 ## 项目身份
 
 **ida-headless-mcp** —— 通过 Model Context Protocol(MCP)对外暴露 IDA Pro 的无头(headless)二进制分析能力。

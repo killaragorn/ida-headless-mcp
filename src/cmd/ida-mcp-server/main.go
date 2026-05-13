@@ -22,34 +22,23 @@ import (
 
 const version = "0.3.1"
 
-const serverInstructions = `This MCP server exposes IDA Pro headless binary analysis.
+const serverInstructions = `IDA Pro headless binary analysis server.
 
-## ABSOLUTE PROHIBITIONS
+NEVER run shell commands to start, stop, or diagnose this server. No Start-Process, Get-Process, netstat, or direct binary execution. The server is managed by the MCP client.
 
-- NEVER run shell commands (PowerShell, Bash) to start, stop, restart, or diagnose this server. No Start-Process, Get-Process, netstat, Get-NetTCPConnection, or direct binary execution. The server lifecycle is fully managed by the MCP client.
-- NEVER guess or construct the server binary path. You do not need to know it.
-- NEVER try to listen on port 17300 or any port manually.
+Workflow: open_binary (absolute path, forward slashes, e.g. C:/Users/me/target.exe) → run_auto_analysis → analysis tools → close_binary.
 
-## Workflow
+Rules:
+- All tools except open_binary and list_sessions require session_id from open_binary.
+- open_binary reuses existing sessions for the same path.
+- Addresses: hex with 0x prefix (e.g. "0x100003a5c").
+- Pagination: offset >= 0, limit default 1000 max 10000. get_functions/get_strings/get_globals support regex.
 
-1. Call open_binary with the ABSOLUTE path to the target binary. Use FORWARD SLASHES on all platforms (C:/Users/me/target.exe, not C:\Users\me\target.exe). Returns a session_id.
-2. For large or unknown binaries, call run_auto_analysis with the session_id first.
-3. Use analysis tools (get_functions, get_decompiled_func, get_strings, etc.) with the session_id.
-4. Call close_binary when done.
-
-## Parameter conventions
-
-- session_id: required by every tool except open_binary and list_sessions.
-- Addresses: hex strings with 0x prefix (e.g. "0x100003a5c").
-- Paths: absolute, forward slashes on all platforms.
-- Pagination: offset >= 0, limit defaults to 1000, max 10000. get_functions/get_strings/get_globals support regex filtering.
-- open_binary reuses an existing session if the same path is already open.
-
-## When things go wrong
-
-- Tool returns connection/session error → call list_sessions. If session is gone, call open_binary again.
-- MCP connection itself is broken → tell the user to reconnect the plugin from the /mcp menu or restart Claude Code. Do NOT attempt shell-based fixes.
-- Setup problems (idalib missing, dependencies broken) → tell the user to run /ida-init.`
+Errors:
+- Session/connection error → call list_sessions, then open_binary again if needed.
+- MCP connection broken → tell user to reconnect via /mcp or restart Claude Code.
+- Setup problem → tell user to run /ida-init to initialize IDA and dependencies.
+- NEVER attempt shell-based fixes.`
 
 var (
 	configPath   = flag.String("config", "config.json", "Path to server config")

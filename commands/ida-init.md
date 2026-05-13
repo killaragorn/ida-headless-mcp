@@ -1,24 +1,25 @@
 ---
-description: Run the ida-headless-mcp friendly initializer - detect IDA, activate idalib, and install Python deps.
+description: "Initialize ida-headless-mcp plugin: detect IDA, activate idalib, install Python deps. Use when the plugin shows 'failed' or MCP tools return errors. NEVER start the server manually via shell commands."
 ---
 
-Run the bundled launcher so the plugin can initialize IDA/idapro dependencies without requiring a local Go build.
+Initialize the ida-headless-mcp plugin so the MCP server can start and serve analysis tools.
 
-**IMPORTANT: This is the ONLY correct way to fix a failed or broken ida-headless MCP server. NEVER attempt to start, stop, or diagnose the server process manually via shell commands (PowerShell Start-Process, Get-Process, netstat, Bash, etc.). The server lifecycle is managed by the MCP client.**
+**NEVER start, stop, or diagnose the MCP server process via shell commands (Start-Process, Get-Process, netstat, Bash, etc.). The server lifecycle is managed by the MCP client. This command is the ONLY correct fix path.**
 
 Steps:
 
-1. Determine `$ROOT`. Prefer `${CLAUDE_PLUGIN_ROOT}`; otherwise use the current plugin root if it contains `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`.
-2. Run `python "$ROOT/scripts/launch.py" init --skip-build` for normal plugin installs. If `python` is unavailable, retry with `python3`.
-3. If the user passes flags after `/ida-init` (such as `--ida-path "/Applications/IDA Pro 9.3.app/Contents/MacOS"`, `--skip-ida`, `--skip-python`, or `--skip-build`), forward them verbatim. Keep `--skip-build`; plugin packages are runtime artifacts, not source build roots.
-4. Stream the output to the user. Every step prints a checkmark or an actionable hint.
-5. After init succeeds, restart the `ida-headless` MCP server so the initialized environment is picked up. Tell the user to run `/mcp`, or restart Claude Code if the server does not reconnect automatically.
+1. Determine `$ROOT`. Prefer `${CLAUDE_PLUGIN_ROOT}`; otherwise locate the directory containing `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`.
+2. Run `python "$ROOT/scripts/launch.py" init --skip-build`. If `python` is unavailable, retry with `python3`.
+3. Forward user flags verbatim (e.g. `--ida-path "C:\Program Files\IDA Pro 9.3"`, `--skip-ida`, `--skip-python`). Always keep `--skip-build`.
+4. Stream the output. Every step prints a checkmark or actionable hint.
+5. After success, tell the user to reconnect the MCP server via `/mcp` or restart Claude Code.
 
-If detection fails (no IDA found), suggest:
+If IDA detection fails, suggest:
 
-- Set `IDA_PATH` to the IDA install directory, or pass `--ida-path "<path>"`.
-- For macOS: `/Applications/IDA Pro 9.X.app/Contents/MacOS`
-- For Windows: `C:\Program Files\IDA Pro 9.X`
-- For Linux: `/opt/idapro-9.X` or `~/idapro-9.X`
+- Windows: `--ida-path "C:\Program Files\IDA Pro 9.X"` or `--ida-path "F:\Tool\IDA Professional 9.X"`
+- macOS: `--ida-path "/Applications/IDA Pro 9.X.app/Contents/MacOS"`
+- Linux: `--ida-path "/opt/idapro-9.X"`
 
-Do not silently proceed past errors - surface the actionable hint each failed step prints.
+Or set the `IDA_PATH` environment variable and restart.
+
+Do not silently proceed past errors — surface the actionable hint each failed step prints.
