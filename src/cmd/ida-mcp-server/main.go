@@ -20,7 +20,7 @@ import (
 	"github.com/zboralski/ida-headless-mcp/internal/worker"
 )
 
-const version = "0.3.0"
+const version = "0.3.1"
 
 const serverInstructions = `This MCP server exposes IDA Pro headless binary analysis.
 
