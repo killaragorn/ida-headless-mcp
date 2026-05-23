@@ -8,7 +8,7 @@
       "name": "ida-headless-mcp",
       "source": {
         "source": "local",
-        "path": "."
+        "path": "./plugins/ida-headless-mcp"
       },
       "policy": {
         "installation": "AVAILABLE",

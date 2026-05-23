@@ -4,6 +4,7 @@
 *.cmd text eol=crlf
 
 bin/ida-mcp-server-* binary
+plugins/*/bin/ida-mcp-server-* binary
 *.exe binary
 *.dll binary
 *.so binary

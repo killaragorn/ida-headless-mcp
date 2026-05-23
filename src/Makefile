@@ -1,8 +1,9 @@
-.PHONY: proto proto-check clean build plugin-sync prebuilt test run restart integration-test inspector setup setup-idalib init plugin-check stdio
+.PHONY: proto proto-check clean build plugin-sync sync-codex-plugin-package prebuilt test run restart integration-test inspector setup setup-idalib init plugin-check stdio
 
 GO_BUILD_FLAGS ?= -trimpath
 GO_LDFLAGS ?= -s -w
 PLUGIN_DIR := ..
+CODEX_PLUGIN_DIR := $(PLUGIN_DIR)/plugins/ida-headless-mcp
 
 # Protobuf generation
 proto:
@@ -19,21 +20,49 @@ build:
 	@mkdir -p bin
 	go build $(GO_BUILD_FLAGS) -ldflags '$(GO_LDFLAGS)' -o bin/ida-mcp-server ./cmd/ida-mcp-server
 
-# Sync source runtime files into the isolated plugin package.
+# Sync source runtime files into the root plugin package.
 plugin-sync:
 	@rm -rf $(PLUGIN_DIR)/python
 	@mkdir -p $(PLUGIN_DIR)/python
 	cp -R python/worker $(PLUGIN_DIR)/python/worker
 	cp python/requirements.txt $(PLUGIN_DIR)/python/requirements.txt
+	$(MAKE) sync-codex-plugin-package
+
+# Sync the root plugin package into the Codex marketplace plugin directory.
+sync-codex-plugin-package:
+	@rm -rf $(CODEX_PLUGIN_DIR)
+	@mkdir -p $(CODEX_PLUGIN_DIR)
+	cp -R $(PLUGIN_DIR)/.claude-plugin $(CODEX_PLUGIN_DIR)/.claude-plugin
+	cp -R $(PLUGIN_DIR)/.codex-plugin $(CODEX_PLUGIN_DIR)/.codex-plugin
+	cp $(PLUGIN_DIR)/.mcp.json $(CODEX_PLUGIN_DIR)/.mcp.json
+	@mkdir -p $(CODEX_PLUGIN_DIR)/bin
+	cp $(PLUGIN_DIR)/bin/ida-mcp-server-windows-amd64.exe $(CODEX_PLUGIN_DIR)/bin/
+	cp $(PLUGIN_DIR)/bin/ida-mcp-server-linux-amd64 $(CODEX_PLUGIN_DIR)/bin/
+	cp $(PLUGIN_DIR)/bin/ida-mcp-server-linux-arm64 $(CODEX_PLUGIN_DIR)/bin/
+	cp $(PLUGIN_DIR)/bin/ida-mcp-server-darwin-amd64 $(CODEX_PLUGIN_DIR)/bin/
+	cp $(PLUGIN_DIR)/bin/ida-mcp-server-darwin-arm64 $(CODEX_PLUGIN_DIR)/bin/
+	cp -R $(PLUGIN_DIR)/commands $(CODEX_PLUGIN_DIR)/commands
+	cp -R $(PLUGIN_DIR)/config $(CODEX_PLUGIN_DIR)/config
+	cp -R $(PLUGIN_DIR)/python $(CODEX_PLUGIN_DIR)/python
+	cp -R $(PLUGIN_DIR)/scripts $(CODEX_PLUGIN_DIR)/scripts
+	cp -R $(PLUGIN_DIR)/skills $(CODEX_PLUGIN_DIR)/skills
+	cp $(PLUGIN_DIR)/CLAUDE.md $(CODEX_PLUGIN_DIR)/CLAUDE.md
+	cp $(PLUGIN_DIR)/LICENSE $(CODEX_PLUGIN_DIR)/LICENSE
+	cp $(PLUGIN_DIR)/README.md $(CODEX_PLUGIN_DIR)/README.md
 
 # Rebuild all committed plugin binaries in the isolated plugin package.
-prebuilt: plugin-sync
+prebuilt:
+	@rm -rf $(PLUGIN_DIR)/python
+	@mkdir -p $(PLUGIN_DIR)/python
+	cp -R python/worker $(PLUGIN_DIR)/python/worker
+	cp python/requirements.txt $(PLUGIN_DIR)/python/requirements.txt
 	@mkdir -p $(PLUGIN_DIR)/bin
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) -ldflags '$(GO_LDFLAGS)' -o $(PLUGIN_DIR)/bin/ida-mcp-server-windows-amd64.exe ./cmd/ida-mcp-server
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) -ldflags '$(GO_LDFLAGS)' -o $(PLUGIN_DIR)/bin/ida-mcp-server-linux-amd64 ./cmd/ida-mcp-server
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) -ldflags '$(GO_LDFLAGS)' -o $(PLUGIN_DIR)/bin/ida-mcp-server-linux-arm64 ./cmd/ida-mcp-server
 	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) -ldflags '$(GO_LDFLAGS)' -o $(PLUGIN_DIR)/bin/ida-mcp-server-darwin-amd64 ./cmd/ida-mcp-server
 	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) -ldflags '$(GO_LDFLAGS)' -o $(PLUGIN_DIR)/bin/ida-mcp-server-darwin-arm64 ./cmd/ida-mcp-server
+	$(MAKE) sync-codex-plugin-package
 
 # Run the friendly initializer (detect IDA, install deps, build binary)
 init: build
@@ -46,7 +75,7 @@ stdio: build
 # Sanity-check the Claude Code plugin manifest is valid JSON
 plugin-check:
 	@command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1 || { echo "python required for plugin-check"; exit 1; }
-	@python3 -c "import json; [json.load(open(p)) for p in ['$(PLUGIN_DIR)/.claude-plugin/plugin.json','$(PLUGIN_DIR)/.codex-plugin/plugin.json','$(PLUGIN_DIR)/.codex-plugin/mcp.json','$(PLUGIN_DIR)/.agents/plugins/marketplace.json','$(PLUGIN_DIR)/.claude/settings.json','$(PLUGIN_DIR)/config/config.example.json','config.example.json']]" 2>/dev/null || python -c "import json; [json.load(open(p)) for p in ['$(PLUGIN_DIR)/.claude-plugin/plugin.json','$(PLUGIN_DIR)/.codex-plugin/plugin.json','$(PLUGIN_DIR)/.codex-plugin/mcp.json','$(PLUGIN_DIR)/.agents/plugins/marketplace.json','$(PLUGIN_DIR)/.claude/settings.json','$(PLUGIN_DIR)/config/config.example.json','config.example.json']]"
+	@python3 -c "import json; [json.load(open(p)) for p in ['$(PLUGIN_DIR)/.claude-plugin/plugin.json','$(PLUGIN_DIR)/.codex-plugin/plugin.json','$(PLUGIN_DIR)/.mcp.json','$(PLUGIN_DIR)/.codex-plugin/mcp.json','$(PLUGIN_DIR)/plugins/ida-headless-mcp/.codex-plugin/plugin.json','$(PLUGIN_DIR)/plugins/ida-headless-mcp/.mcp.json','$(PLUGIN_DIR)/.agents/plugins/marketplace.json','$(PLUGIN_DIR)/.claude/settings.json','$(PLUGIN_DIR)/config/config.example.json','config.example.json']]" 2>/dev/null || python -c "import json; [json.load(open(p)) for p in ['$(PLUGIN_DIR)/.claude-plugin/plugin.json','$(PLUGIN_DIR)/.codex-plugin/plugin.json','$(PLUGIN_DIR)/.mcp.json','$(PLUGIN_DIR)/.codex-plugin/mcp.json','$(PLUGIN_DIR)/plugins/ida-headless-mcp/.codex-plugin/plugin.json','$(PLUGIN_DIR)/plugins/ida-headless-mcp/.mcp.json','$(PLUGIN_DIR)/.agents/plugins/marketplace.json','$(PLUGIN_DIR)/.claude/settings.json','$(PLUGIN_DIR)/config/config.example.json','config.example.json']]"
 	@echo "plugin JSON is valid"
 
 # Run fast unit tests only (excludes integration tests)

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ida-headless": {
+      "cwd": ".",
+      "command": "python",
+      "args": ["./scripts/launch.py", "--stdio"]
+    }
+  }
+}
